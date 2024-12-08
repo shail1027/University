@@ -65,29 +65,34 @@ void print_process_info() {
 // 초기화 함수
 void initialize() {
     srand(time(NULL));
-    clock_pointer = 0;
+    clock_pointer = 0; // FIFO 포인터 초기화
 
+    // 메모리 초기화
     for (int i = 0; i < MEM_FRAMES; i++) {
         memory[i].pid = -1;
         memory[i].page_number = -1;
     }
 
+    // 프로세스 초기화
     for (int i = 0; i < MAX_PROCESSES; i++) {
         processes[i].pid = i;
-        processes[i].total_pages = 6 + rand() % 5;
+        processes[i].total_pages = 6 + rand() % 5; // 6~10개 페이지 요구
         processes[i].page_faults = 0;
         processes[i].accesses = 0;
 
+        // 참조열 생성
         for (int j = 0; j < 20; j++) {
             processes[i].reference_string[j] = rand() % processes[i].total_pages;
         }
 
+        // 페이지 테이블 초기화
         for (int j = 0; j < processes[i].total_pages; j++) {
             processes[i].page_table[j].page_number = j;
             processes[i].page_table[j].valid_bit = false;
             processes[i].page_table[j].frame_number = -1;
         }
 
+        // 30%의 페이지를 미리 메모리에 적재
         int preload_count = processes[i].total_pages * 0.3;
         int preloaded = 0;
 
@@ -101,12 +106,15 @@ void initialize() {
                 processes[i].page_table[page_to_load].valid_bit = true;
                 processes[i].page_table[page_to_load].frame_number = clock_pointer;
 
+                // FIFO 포인터 이동
                 clock_pointer = (clock_pointer + 1) % MEM_FRAMES;
                 preloaded++;
             }
         }
     }
 }
+
+
 
 void print_page_table(Process* p) {
     printf("\nProcess %d Page Table:\n", p->pid);
@@ -117,6 +125,7 @@ void print_page_table(Process* p) {
 }
 
 void fifo_replace(Process* p, int page) {
+    // 빈 프레임 우선 확인
     for (int i = 0; i < MEM_FRAMES; i++) {
         if (memory[i].pid == -1) {
             memory[i].pid = p->pid;
@@ -129,24 +138,30 @@ void fifo_replace(Process* p, int page) {
         }
     }
 
-    int victim_frame = clock_pointer;
+    // FIFO 교체 수행
+    int victim_frame = clock_pointer; // FIFO 순서에 따라 교체
     int victim_pid = memory[victim_frame].pid;
     int victim_page = memory[victim_frame].page_number;
 
+    // 희생 페이지 무효화
     if (victim_pid != -1) {
         processes[victim_pid].page_table[victim_page].valid_bit = false;
         processes[victim_pid].page_table[victim_page].frame_number = -1;
     }
 
+    // 새로운 페이지 적재
     memory[victim_frame].pid = p->pid;
     memory[victim_frame].page_number = page;
     p->page_table[page].valid_bit = true;
     p->page_table[page].frame_number = victim_frame;
 
+    // FIFO 포인터 이동
     clock_pointer = (clock_pointer + 1) % MEM_FRAMES;
 
     log_event("Page Replaced (FIFO)", p->pid, page, victim_frame, victim_page);
 }
+
+
 
 void optimal_replace(Process* p, int page, int current_access) {
     for (int i = 0; i < MEM_FRAMES; i++) {
